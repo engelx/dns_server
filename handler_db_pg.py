@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
-
+# -*- coding: utf-8 -*-
 """
-Created on Mon 17/04/2017
-
-@author: Miguel Diaz
+@title           :MiniServerDNS
+@author          :Engelx (Miguel A. Diaz)
+@email           :mgldzm@gmail.com 
+@date            :2017-08-31
+@version         :0.7
+@python_version  :3.5
 """
 
 import psycopg2 as db
@@ -23,22 +26,24 @@ class dbman_pg:
         else:
             self.sql = "INSERT INTO {} ({}) VALUES ({});".format(tabla, fields, values)
             
-        try:
+        try: 
             self.cur.execute(self.sql)
-        except db.IntegrityError:
+        except db.IntegrityError: #if there are unique or not nullable values in conflict
             return 0
-        return 1        
+        return self.cur.rowcount        
         
-    def select(self, tabla, where=False, fields=False):
+    def select(self, tabla, where=False, fields=False, execute=True):
         self.sql = "SELECT {} FROM {}"
         if where: self.sql += " WHERE {}"
         if fields:
             self.sql = self.sql.format(fields, tabla, where)
         else:
             self.sql = self.sql.format("*", tabla, where)
-        self.sql += ";"
-        self.cur.execute(self.sql)
-        return self.cur.fetchall()
+        if execute:
+            self.sql += ";"
+            self.cur.execute(self.sql)
+            return self.cur.fetchall()
+        return self.sql
         
     def update(self, tabla,  set_value, where=False):        
         self.sql = "UPDATE {} SET {};"
@@ -52,7 +57,12 @@ class dbman_pg:
         self.sql = self.sql.format(tabla, where)
         self.cur.execute(self.sql)
         return self.cur.rowcount
-        
+    
+    def count(self, tabla):
+        self.sql("SELECT COUNT(*) FROM {};".format(tabla))
+        self.cur.execute(self.sql)
+        return self.cur.fetchall()[0]
+    
     def execute(self, sentence):
         self.sql = sentence
         self.cur.execute(self.sql)
@@ -68,3 +78,7 @@ class dbman_pg:
         
     def commit(self):
         self.con.commit()
+        return self.cur.rowcount
+        
+    def close(self):
+        self.con.close()
