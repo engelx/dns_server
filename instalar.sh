@@ -23,6 +23,8 @@ psql -U postgres < base.sql
 echo "Instalando servicio"
 cp script_init /etc/init.d/minidns
 update-rc.d -f minidns defaults
+systemctl daemon-reload
+
 service minidns start
 
 echo "Probando instalación"

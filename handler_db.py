@@ -179,7 +179,7 @@ class dbman:
             group = 'name'
         
         # Obtenemos las excepciones con nombre de usuario
-        return self.db.select("exceptions AS e, users AS u", "u.ip=e.ip AND u.{} ILIKE '{}'".format(group, user.lower()), "u.name, u.ip, REPLACE(REPLACE(e.host, '%.', ''), '%', 'LIBRE')")
+        return self.db.select("exceptions AS e, users AS u", "u.ip=e.ip AND u.{} ILIKE '{}'".format(group, user.lower()), "u.name, u.ip, REPLACE(e.host, '%', 'LIBRE')")
             
     # Añadir hosts Bloqueados   
     def blockAdd(self, host, cat):
