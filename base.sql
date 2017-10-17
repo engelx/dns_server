@@ -75,7 +75,6 @@ INSERT INTO "configuration" ("name", "value") VALUES ('use_block', 'True');
 INSERT INTO "configuration" ("name", "value") VALUES ('redirect_blocked_ip', '10.16.100.100');
 INSERT INTO "configuration" ("name", "value") VALUES ('primary_dns', '8.8.8.8');
 INSERT INTO "configuration" ("name", "value") VALUES ('secondary_dns', '8.8.4.4');
-INSERT INTO "configuration" ("name", "value") VALUES ('secondary_dns', '200.44.32.12');
 INSERT INTO "configuration" ("name", "value") VALUES ('log_file', '/var/log/dns_server');
 INSERT INTO "configuration" ("name", "value") VALUES ('debug', 'False');
 INSERT INTO "configuration" ("name", "value") VALUES ('use_log', 'False');

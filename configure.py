@@ -11,7 +11,6 @@
 import sys, re
 from handler_db import dbman
 
-############################################ IMPRESIÓN ########################
 def chColor(color=False, bg=False):
     out = "\033[0m"
     if not bg:
@@ -58,7 +57,7 @@ def showHelp():
     #out += "  Inicia el menú para añadir un usuario\n"
     out += _ye + filename + _bl + " user " + _gr + "add " + _cy + "{username} {group} {ip}  \n" + _no
     out += "  Agrega un usuario\n"
-    out += _ye + filename + _bl + " user " + _re + "rem user " + _cy + "{username}\n" + _no
+    out += _ye + filename + _bl + "u ser " + _re + "rem user " + _cy + "{username}\n" + _no
     out += "  Elimina un usuario\n"
     out += _ye + filename + _bl + " user " + _re + "rem group " + _cy + "{group}\n" + _no
     out += "  Elimina todos los usuarios de un grupo y el grupo\n"
@@ -105,6 +104,20 @@ def showHelp():
     
     print(out)
 
+def getServers():
+    file = open("servers.conf", "r")
+    server = file.read()
+    servers = {}
+    for serv in re.findall("(\w+)\:\{([\w\:\s\.]*)\}",server):
+        temp = {}
+        for val in re.findall("(\w+)\:\s*([\w\.]*)",serv[1]):
+            temp[val[0]] = val[1]
+        if len(temp)  != 5:
+            return False
+        servers[serv[0]] = temp
+    file.close()
+    return servers
+
 def printLs(server_name, header,ls):
     space = []
     for word in header:
@@ -134,40 +147,6 @@ def printLs(server_name, header,ls):
         print(string)
     print("-"*(space[-1]+2))
 
-############################################ FUNCIONAMIENTO ###################
-def getServers():
-    file = open("servers.conf", "r")
-    server = file.read()
-    servers = {}
-    for serv in re.findall("(\w+)\:\{([\w\:\s\.]*)\}",server):
-        temp = {}
-        for val in re.findall("(\w+)\:\s*([\w\.]*)",serv[1]):
-            temp[val[0]] = val[1]
-        if len(temp)  != 5:
-            return False
-        servers[serv[0]] = temp
-    file.close()
-    return servers
-
-def parseArgs():
-    args = sys.argv[1:]
-    parsed = {}   
-    pos = ""
-    for i in args:
-        if i[0] == "-":
-            pos = i[1:]
-            if pos in parsed:
-                return False
-            parsed[pos]=""
-            continue
-        
-        parsed[pos] = "{} {}".format(parsed[pos].strip(), i)
-    return parsed
-        
-        
-        
-
-############################################ ACCIONES #########################
 def userAdd(name, group, ip):
     if not re.match("\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", ip):
         print("Error, ip invalida")
@@ -287,8 +266,6 @@ def configurationCheck():
         db = dbman(server)
         ls = db.configurationCheck()
         printLs(server_name, ["CAMPO",  "VALOR"], ls)
-        
-
 
 ###########################################################################    
 
@@ -534,7 +511,7 @@ def menu(params):
         
     else:
         return False
-   
+    
     
 servers = getServers()
 if not servers:
@@ -549,9 +526,26 @@ for server_name in servers:
         print("Error intentando conectar el servidor: ",server_name)
         sys.exit()
 
-
 if len(sys.argv) > 1:
     if not menu(sys.argv[1:]):
         showHelp()
 else:
     showHelp()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
