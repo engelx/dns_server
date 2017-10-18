@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 echo "Instalando archivos necesarios"
-#apt-get update
-#apt-get install postgresql libpq-dev postgresql-client postgresql-client-common python3 python3-psycopg2 -y
+apt-get update
+apt-get install postgresql libpq-dev postgresql-client postgresql-client-common python3 python3-psycopg2 -y
 
 echo "instalando archivos en /etc/minidns"
 mkdir /etc/minidns || true
