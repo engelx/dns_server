@@ -57,7 +57,7 @@ def showHelp():
     #out += "  Inicia el menú para añadir un usuario\n"
     out += _ye + filename + _bl + " user " + _gr + "add " + _cy + "{username} {group} {ip}  \n" + _no
     out += "  Agrega un usuario\n"
-    out += _ye + filename + _bl + "u ser " + _re + "rem user " + _cy + "{username}\n" + _no
+    out += _ye + filename + _bl + " user " + _re + "rem user " + _cy + "{username}\n" + _no
     out += "  Elimina un usuario\n"
     out += _ye + filename + _bl + " user " + _re + "rem group " + _cy + "{group}\n" + _no
     out += "  Elimina todos los usuarios de un grupo y el grupo\n"

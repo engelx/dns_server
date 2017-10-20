@@ -32,8 +32,8 @@ CREATE TABLE blacklist (
 );
 
 CREATE TABLE cache (
-    host character varying(2044) NOT NULL UNIQUE,
-    ip character varying(2044) NOT NULL,
+    host character varying(255) NOT NULL UNIQUE,
+    ip character varying(20) NOT NULL,
     fixed character varying(6) NOT NULL,
     expire integer NOT NULL
 );
@@ -50,17 +50,17 @@ CREATE TABLE exceptions (
 );
 
 CREATE TABLE logs (
-    ip character varying(2044) NOT NULL,
-    date character varying(2044) NOT NULL,
-    host character varying(2044) NOT NULL,
+    ip character varying(20) NOT NULL,
+    date character varying(30) NOT NULL,
+    host character varying(255) NOT NULL,
     id integer NOT NULL,
-    answer character varying(200) NOT NULL
+    answer character varying(20) NOT NULL
 );
 
 CREATE TABLE users (
-    ip character varying(2044) NOT NULL UNIQUE,
-    name character varying(2044) NOT NULL,
-    "group" character varying(2044) NOT NULL
+    ip character varying(20) NOT NULL UNIQUE,
+    name character varying(255) NOT NULL,
+    "group" character varying(255) NOT NULL
 );
 
 ALTER TABLE blacklist OWNER TO minidns;
@@ -78,4 +78,4 @@ INSERT INTO "configuration" ("name", "value") VALUES ('secondary_dns', '8.8.4.4'
 INSERT INTO "configuration" ("name", "value") VALUES ('log_file', '/var/log/dns_server');
 INSERT INTO "configuration" ("name", "value") VALUES ('debug', 'False');
 INSERT INTO "configuration" ("name", "value") VALUES ('use_log', 'False');
-INSERT INTO "configuration" ("name", "value") VALUES ('data_display', '1');
+INSERT INTO "configuration" ("name", "value") VALUES ('data_display', '0');

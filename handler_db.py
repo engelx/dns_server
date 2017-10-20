@@ -9,8 +9,7 @@
 """
 
 from handler_db_pg import dbman_pg as db_base
-import time, json
-from sys import exit
+import time
 
 class dbman:
     
@@ -46,7 +45,10 @@ class dbman:
     
     # Revisa el si host está bloqueado para una ip especifica
     def blocked(self, host, ip): 
-        value = self.db.select("blacklist as b, exceptions as e, users as u ", "u.ip = '{}' and '.{}' like b.host and u.ip=e.ip and b.host not like e.host".format(ip,host))
+        sql = "select * from blacklist where '.{}' like host and not "
+        sql += "(select count(*)::int::bool from exceptions as e, users as u "
+        sql += "where e.ip=u.ip and u.ip='{}' and '.{}' like host )"
+        value = self.db.execute_fetch(sql.format(host, ip, host))
         if value:
             return True
         return False
@@ -179,7 +181,7 @@ class dbman:
             group = 'name'
         
         # Obtenemos las excepciones con nombre de usuario
-        return self.db.select("exceptions AS e, users AS u", "u.ip=e.ip AND u.{} ILIKE '{}'".format(group, user.lower()), "u.name, u.ip, REPLACE(e.host, '%', 'LIBRE')")
+        return self.db.select("exceptions AS e, users AS u", "u.ip=e.ip AND u.{} ILIKE '{}'".format(group, user.lower()), "u.name, u.ip, REPLACE(REPLACE(e.host, '%.', ''),'%', 'LIBRE')")
             
     # Añadir hosts Bloqueados   
     def blockAdd(self, host, cat):
@@ -200,9 +202,10 @@ class dbman:
     
     def blockCheck(self, cat=False):
         if cat:
-            return self.db.select("blacklist", "category='{}'".format(cat), "host, category")
+            return self.db.select("blacklist", "category='{}'".format(cat), "REPLACE(host,'%.', ''), category")
+            
         else:
-            return self.db.select("blacklist", "true", "host, category")
+            return self.db.select("blacklist", "true", "REPLACE(host,'%.', ''), category")
         
     # Agrega un host fijo al Cache
     def cacheStaticAdd(self, host, ip):
