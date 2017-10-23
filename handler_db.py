@@ -68,7 +68,7 @@ class dbman:
         self.db.commit()
         
         # Revisa si el host está en la DB
-        value = self.db.select("cache", "'{}' LIKE host".format(host),"ip")
+        value = self.db.select("cache", "host='{}'".format(host),"ip")
         if not value:
             return False
         
