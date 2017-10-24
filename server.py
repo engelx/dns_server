@@ -43,7 +43,8 @@ def dnsServer(data, ip, conf, udps, ps, server):
             
             return False
         
-        ps(ip,host)# load into pool
+        if not ps(ip,host):# load into pool
+            return False
         
         filt = re.compile("^([\w\.\-])+$") # filter to aviod risks, 
         if not filt.match(host):
@@ -63,7 +64,7 @@ def dnsServer(data, ip, conf, udps, ps, server):
             data = hdnsq.generateResponse(data, conf["redirect_blocked_ip"]) # blocker ip
             if conf["data_display"] == 2: print(ip[0],ip[1],host, conf["redirect_blocked_ip"])
             sender.sendto(data, ip)
-            if conf["use_log"]:
+            if conf["debug"]:
                 db.log(host, ip[0], conf["redirect_blocked_ip"]) 
             ps.ended(ip)
             return True
@@ -81,7 +82,7 @@ def dnsServer(data, ip, conf, udps, ps, server):
                 return False            
             db.cache(host, answer)
             
-        if conf["use_log"]:
+        if conf["debug"]:
             db.log(host, ip[0], answer) 
         data = hdnsq.generateResponse(data, answer) # blocker ip     
         
@@ -136,7 +137,6 @@ class printSystem:
                 return False 
             
             self.querys[ip][port] = [host, time.time()] #show port in ip
-            
             return True
         
         self.querys[ip] = {port: [host, time.time()]} #load ip with port -> host
