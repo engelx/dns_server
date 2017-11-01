@@ -8,91 +8,122 @@
 @version         :0.7
 @python_version  :3.5
 """
-import socket #socket related
 import re, os, time
 from sys import exit
 from threading import Thread
-import handler_dns_query as hdnsq
+from handler_dns_query import dnsQuery
+from handler_dns_query import dnsListener
 from handler_db import dbman
 
-
-def forwardQueryToDNS(data, conf, ps, dns="primary_dns"):
-    forward = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    forward.settimeout(3) # 3 second timout
-    forward.connect((conf[dns], 53)) #call to the dns server
-    forward.send(hdnsq.IntToByte(data)) # send data in bytes
-    try: #if no timeout
-        return hdnsq.processResponse(forward.recv(512)) #get answer
-    except socket.timeout: #if timeout
-        ps.writeLog("dnsServer", "El servidor {} {} no respondió".format(dns, conf[dns]))
-        if dns == "primary_dns":
-            return forwardQueryToDNS(data, conf, ps, dns="secondary_dns")
-        else:
-            return False
-
-def dnsServer(data, ip, conf, udps, ps, server):
-        sender = udps
-        data, host = hdnsq.processQuery(data)
         
-        if not host:
-            if conf["debug"]: 
-                ps.writeLog("dnsServer","No existe host a resolver: \n data.\n {}".format(data))
-
-            data = hdnsq.generateResponse(data) # we cannot resolve this
-            sender.sendto(data, ip)
-            
-            return False
-        
-        if not ps(ip,host):# load into pool
-            return False
-        
-        filt = re.compile("^([\w\.\-])+$") # filter to aviod risks, 
-        if not filt.match(host):
-            if conf["debug"]:
-                ps.writeLog("dnsServer","Host invalido: {}".format(host))
-
-            data = hdnsq.generateResponse(data) # we cannot resolve this
-            sender.sendto(data, ip)
-            ps.ended(ip)
-            return False
-          
-        db = dbman(server)
-        
-        if db.blocked(host, ip[0]) and conf["use_block"]:  # if is blacked and we are blocking
-            if conf["debug"]:
-                    ps.writeLog("dnsServer","Host bloqueado ip: {:<16}, host:{}".format(ip[0], host))
-            data = hdnsq.generateResponse(data, conf["redirect_blocked_ip"]) # blocker ip
-            if conf["data_display"] == 2: print(ip[0],ip[1],host, conf["redirect_blocked_ip"])
-            sender.sendto(data, ip)
-            if conf["debug"]:
-                db.log(host, ip[0], conf["redirect_blocked_ip"]) 
-            ps.ended(ip)
-            return True
-        
-        answer = db.cache(host)
-        
-        if not answer: # if no in cache
-            answer = forwardQueryToDNS(data, conf, ps)
-            if not answer: #if not in dns server or conection problem
-                if conf["debug"]:
-                    ps.writeLog("dnsServer","Servidor remoto no respondió, host: {}".format(host))
-                data = hdnsq.generateResponse(data) # we cannot resolve this
-                sender.sendto(data, ip)
-                ps.ended(ip)
-                return False            
-            db.cache(host, answer)
-            
-        if conf["debug"]:
-            db.log(host, ip[0], answer) 
-        data = hdnsq.generateResponse(data, answer) # blocker ip     
-        
-        if conf["data_display"] == 2: print(ip[0],ip[1],host, answer)
-        
-        
-        sender.sendto(data, ip)
-        ps.ended(ip)
-        return True
+def is_blocked(server, ip, host):
+    if not host in server.blacklist: #si el servidor no está bloqueado
+        return False
     
+    if host in server.exceptions and ip in server.exceptions[host]: #si tiene el host libre
+        return False
+    
+    if '%' in server.exceptions and ip in server.exceptions['%']: #si tiene el todo libre
+        return False
+    
+    return True #está bloqueado
+
+def get_cache(server, host):
+    if host in server.cache: #si el host está en cache
+        if server.cache[host].fixed: #si es un host fijo
+            return server.cache[host].ip
+        
+        if server.cache[host].expire < time.time(): #si no está vencido
+            return server.cache[host].ip
+        else:
+            del server.cache[host] # si está vencido se remueve
+    
+    return False
+    
+def set_cache(server, host, ip):
+    server.cache["host"] = type('x', (object,), {
+            "ip":ip, 
+            "fixed":False, 
+            "expire":time.time()+server.config.cache_expiration
+            })
+    
+    
+    
+
+def dnsServer(listener, server, printSystem):
+        request = listener.request
+        client = listener.client
+        query = dnsQuery(request)
+        
+        ##### Errores en el query #####
+        if not query.host: #si el host está malformado o vacío
+            if server.config.debug:
+                printSystem.writeLog("dnsServer","No existe host a resolver, error")
+            listener.send(client.pair, query.response()) 
+            return False
+
+            
+        if not printSystem(client, query.host):# cargamos la ip
+            return False
+        
+        filt = re.compile("^([\w\.\-])+$") # filtramos para evitar riesgos
+        if not filt.match(query.host):
+            if server.config.debug:
+                printSystem.writeLog("dnsServer","Host invalido: {}".format(query.host))
+            listener.send(client.pair, query.response()) #respondemos como invalido
+            printSystem.ended(client)
+            return False
+        
+        
+        ##### Respuestas bloqueadas #####
+        if server.config.use_block and is_blocked(server, client.ip, query.host): # si están activados los bloqueos y está blqoeiado
+            if server.config.debug:
+                    printSystem.writeLog("dnsServer","Host bloqueado ip: {:<16}, host:{}".format(client.ip, query.host))
+            
+            if server.config.data_display == 2: print(client.ip, client.port, query.host, server.config.redirect_blocked_ip)
+            
+            listener.send(client.pair, query.response(server.config.redirect_blocked_ip)) #respondemos con la ip del bloqueo
+   
+            if server.config.data_display == 2: print(client.ip, client.port, query.host, server.config.redirect_blocked_ip)
+            if server.config.debug:
+                pass #no implementado
+                ##db.log(host, con.ip, config.redirect_blocked_ip) 
+                
+            printSystem.ended(client)
+            return True
+            
+        ##### Respuestas no bloqueadas #####
+        data = ""
+        ip = get_cache(server, query.host)
+        if not ip: #si no está en cache
+            data = listener.forwardToDns(server.config.primary_dns, query.data, 2.0) 
+            if not data: #si falla usamos el dns secundario
+                data = listener.forwardToDns(server.config.secondary_dns, query.data, 2.0) 
+            
+            if not data: #si no hubo respuesta
+                if server.config.debug:
+                    printSystem.writeLog("dnsServer","Servidor remoto no respondió, host: {}".format(query.host))
+                    
+                listener.send(client.pair, query.response()) 
+                printSystem.ended(client)
+                return False
+            
+            ip = query.processResponse(data) # obtenemos la ip de la respuesta
+            if not ip:
+                listener.send(client.pair, query.response()) 
+                printSystem.ended(client)
+                return False
+            
+            set_cache(server, query.host, ip) # agregamos al cache
+        
+        listener.send(client.pair, query.response(ip)) 
+        printSystem.ended(client)
+
+        if server.config.data_display == 2: print(client.ip, client.port, query.host, ip)
+        
+        return True
+
+
 def getServers():
     path = "/".join(os.path.realpath(__file__).split("/")[:-1])+"/"
     file = open(path + "servers.conf", "r")
@@ -110,10 +141,10 @@ def getServers():
 
 
 class printSystem:
-    def __init__(self, conf):
+    def __init__(self, config):
         self.querys = {}
         self.count = 0
-        self.log = conf["log_file"]
+        self.log = config.log_file
         file = open(self.log, "a")
         if not file:
             msg = "No se pudo abrir el archivo de logs {}, saliendo del programa".format(self.log)
@@ -127,29 +158,25 @@ class printSystem:
         file.close()
         
             
-    def __call__(self, ipPort, host):
-        ip = ipPort[0]
-        port = ipPort[1]
+    def __call__(self, client, host):
         self.count += 1
-        if ip in self.querys: # if the ip is in the query dict
-            if port in self.querys[ip]: # if the port is already in user from that ip, is an error?
-                self.writeLog("Query control", "ip: {}:{} is already in pool, duplicated query".format(ip,port))
+        if client.ip in self.querys: # if the ip is in the query dict
+            if client.port in self.querys[client.ip]: # if the port is already in user from that ip, is an error?
+                self.writeLog("Query control", "ip: {}:{} is already in pool, duplicated query".format(client.ip,client.port))
                 return False 
             
-            self.querys[ip][port] = [host, time.time()] #show port in ip
+            self.querys[client.ip][client.port] = [host, time.time()] #show port in ip
             return True
         
-        self.querys[ip] = {port: [host, time.time()]} #load ip with port -> host
+        self.querys[client.ip] = {client.port: [host, time.time()]} #load ip with port -> host
         return True
         
-    def ended(self, ipPort):
-        ip = ipPort[0]
-        port = ipPort[1]
+    def ended(self, client):
         
-        del self.querys[ip][port] # remove port
+        del self.querys[client.ip][client.port] # remove port
         
-        if not len(self.querys[ip]): # remove ip
-            del self.querys[ip]
+        if not len(self.querys[client.ip]): # remove ip
+            del self.querys[client.ip]
     
     def __repr__(self):
         active = 0
@@ -232,9 +259,15 @@ class printSystem:
 
 localServer = getServers()["local"]
 localdb = dbman(localServer)
-config = localdb.getConfig()
+server = type('x', (object,), {
+        "blacklist":localdb.getBlacklist() , 
+        "users":localdb.getUsers() , 
+        "cache":localdb.getDomains(),
+        "exceptions":localdb.getExceptions(),
+        "config":localdb.getConfig()
+        })
 
-ps = printSystem(config) # print and log system
+ps = printSystem(server.config) # print and log system
 
 header = "Servidor iniciado: {}".format(time.strftime("%Y-%m-%d %H:%M:%S"))
 os.system("clear")
@@ -243,44 +276,29 @@ print ("Solicitudes:", ps.count)
 
 global running
 running = True
-udps = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # open listen socket
-udps.bind(('',53)) # as port 53, DNS
 
-last_time = time.time() #countdown to reload conf
-
+listener = dnsListener()
 
 try:
-    while running: #forever
-        try:
-            udps.settimeout(0.5)#timout in 0.5 to actualize the display
-            data, ip = udps.recvfrom(512) #read packet
-            thread = Thread(target = dnsServer, args = (data, ip, config, udps, ps, localServer))
-            thread.start()
-        except socket.timeout:
-            pass
+    while running: #until keyb interrupt
         
-        config = localdb.getConfig()
+        if not listener.waitQuery(0.5):  #timout in 0.5 to actualize the display, on false restart
+            continue
         
-        if config["data_display"] == 1:
+        thread = Thread(target = dnsServer, args = (listener, server, ps))
+        thread.start()
+
+        if server.config.data_display == 1:
             os.system("clear")
             print (header)
-            print ("Servidor dns Principal:", config["primary_dns"])
-            print ("Servidor dns Principal:", config["secondary_dns"])
+            print ("Servidor dns Principal:", server.config.primary_dns)
+            print ("Servidor dns Principal:", server.config.secondary_dns)
             print ("Solicitudes:", ps.count) 
             print (ps)
         
 except KeyboardInterrupt:
     running = False
     print ('Finalizando')
-
-
-
-
-
-
-
-
-
 
 
 

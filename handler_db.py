@@ -31,49 +31,48 @@ class dbman:
     
     # Obtiene la tabla configuración y la convierte en array
     def getConfig(self, element=False): 
-        value = None
-        if element:
-            value = self._convty(self.db.select("configuration", "name='{}'".format(element))[0][1])
-        else:
-            value = self.db.select("configuration")
-            temp = {}
-            for i in value:
-                temp[i[0]]= self._convty(i[1])
-                
-            value = temp
-        return value
+        output = type('x', (object,), {})        
+        value = self.db.select("configuration")
+
+        for i in value:
+            setattr(output,i[0], self._convty(i[1]))
+        
+        return output
     
     # Revisa el si host está bloqueado para una ip especifica
-    def blocked(self, host, ip): 
-        sql = "select * from blacklist where '.{}' like host and not "
-        sql += "(select count(*)::int::bool from exceptions as e, users as u "
-        sql += "where e.ip=u.ip and u.ip='{}' and '.{}' like host )"
-        value = self.db.execute_fetch(sql.format(host, ip, host))
-        if value:
-            return True
-        return False
-
-    # Revisa si el host está en caché, si se pasa ip, la carga
-    def cache(self, host, ip=None): 
+    def getBlacklist(self):
+        out = self.db.select("blacklist", "TRUE ORDER BY host", "REPLACE(host, '%.', '')")
+        single = []
+        for el in out:
+            single.append(el[0])
+        return single
         
-        # Si ip, carga nueva ip
-        if ip: 
-            self.db.delete("cache", "host='{}'".format(host))
-            self.db.insert("cache","host,ip,expire,fixed","'{}', '{}', {}, 'False'".format(host, ip, int(time.time())))
-            self.db.commit()
-            return ip
-        
-        #limpiamos la DB de las resoluciones vencidas
-        self.db.delete("cache", "expire<{} and fixed='False'".format(int(time.time()-self.conf["cache_expiration"])))
-        self.db.commit()
-        
-        # Revisa si el host está en la DB
-        value = self.db.select("cache", "'{}' LIKE host".format(host),"ip")
-        if not value:
-            return False
-        
-        # Si está returnamos la ip
-        return value[0][0]
+    
+    def getUsers(self):
+        out = self.db.select("users", "TRUE ORDER BY ip", "ip")
+        single = []
+        for el in out:
+            single.append(el[0])
+        return single
+    
+    def getDomains(self):
+        out = self.db.select("cache", "fixed='True' ORDER BY host", "host, ip")
+        assoc = {}
+        for el in out:
+            assoc[el[0]] = type('x', (object,), {"ip":el[1], "fixed":True, "expire":0})
+        return assoc
+    
+    def getExceptions(self):
+        out = self.db.select("exceptions", "TRUE ORDER BY host", "REPLACE(host, '%.', ''), ip")
+        assoc = {}
+        for el in out:
+            try:
+                type(assoc[el[0]])
+            except:
+                assoc[el[0]]=[]
+            
+            assoc[el[0]].append(el[1])
+        return assoc
 
     # Genera el log de actualizaciones
     def log(self, host, ip, answer): 
