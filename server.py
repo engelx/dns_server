@@ -10,6 +10,7 @@
 """
 import re, os, time
 from sys import exit
+from sys import getsizeof
 from threading import Thread
 from handler_dns_query import dnsQuery
 from handler_dns_query import dnsListener
@@ -41,13 +42,18 @@ def get_cache(server, host):
     return False
     
 def set_cache(server, host, ip):
-    server.cache["host"] = type('x', (object,), {
+    server.cache[host] = type('x', (object,), {
             "ip":ip, 
             "fixed":False, 
             "expire":time.time()+server.config.cache_expiration
             })
     
-    
+def clean_cache(server):
+    actTime = time.time()
+    for el in server.cache:
+        if not server.cache[el].fixed and server.cache[el].expire < actTime:
+            del server.cache[el]
+        
     
 
 def dnsServer(listener, server, printSystem):
@@ -288,11 +294,26 @@ try:
         thread = Thread(target = dnsServer, args = (listener, server, ps))
         thread.start()
 
+        
+
         if server.config.data_display == 1:
             os.system("clear")
             print (header)
             print ("Servidor dns Principal:", server.config.primary_dns)
             print ("Servidor dns Principal:", server.config.secondary_dns)
+            
+            mem_server = getsizeof(server.cache)
+            mem_server += getsizeof(server.blacklist)
+            mem_server += getsizeof(server.users)
+            mem_server += getsizeof(server.exceptions)
+            if mem_server < 1.5*10**3:
+                mem_server = "{} B".format(mem_server)
+            elif mem_server < 1.5*10**6:
+                mem_server = "{} kB".format(mem_server//10**3)
+            else:
+                mem_server = "{} MB".format(mem_server//10**6)
+            
+            print ("Server memoria: ", mem_server, ", Elementos en cache:", len(server.cache))
             print ("Solicitudes:", ps.count) 
             print (ps)
         
